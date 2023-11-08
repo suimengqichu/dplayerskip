@@ -1,10 +1,12 @@
 // ==UserScript==
 // @name            星空影院跳过片头片尾、播放速度、全屏、自动播放下一集
 // @namespace       http://tampermonkey.net/
-// @version         beta2
+// @version         beta3
 // @description     星空影院定制化，通过按键控制跳过片头片尾、播放速度、全屏、自动播放下一集
 // @author          随梦期初
 // @match           *://lnyzyw.com/*
+// @match           *://www.ysgc1.cc/*
+// @match           *://www.bytpl.com/*
 // @icon            https://www.google.com/s2/favicons?sz=64&domain=lnyzyw.com
 // @grant           none
 // @license         GPLv3
@@ -17,9 +19,9 @@ const dplayerBezel = "div.dplayer-video-wrap > div.dplayer-bezel"
 const videoEle = "div.dplayer-video-wrap > .dplayer-video-current"
 
 let dplayer_bezel_event = 0,
-    dplayer_danloading = window.length > 2 ? window[2].document.querySelector(dplayerDanloading) : "",
-    dplayer_bezel = window.length > 2 ? window[2].document.querySelector(dplayerBezel) : "",
-    video_ele = window.length > 2 ? window[2].document.querySelector(videoEle) : ""
+    dplayer_danloading = window[window.length - 1] && window[window.length - 1].document && window[window.length - 1].document.querySelector(dplayerDanloading) ? window[window.length - 1].document.querySelector(dplayerDanloading) : window.document.querySelector(dplayerDanloading),
+    dplayer_bezel = window[window.length - 1] && window[window.length - 1].document && window[window.length - 1].document.querySelector(dplayerBezel) ? window[window.length - 1].document.querySelector(dplayerBezel) : window.document.querySelector(dplayerBezel),
+    video_ele = window[window.length - 1] && window[window.length - 1].document && window[window.length - 1].document.querySelector(videoEle) ? window[window.length - 1].document.querySelector(videoEle) : window.document.querySelector(videoEle)
 
 const speedArray = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 2.0, 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7, 2.8, 2.9, 3.0]
 
@@ -61,9 +63,9 @@ const myplayer = {
                 let message_ui = doc_s.createElement("span");
                 message_ui.className = "dplayer-danloading";
                 dplayer_bezel.appendChild(message_ui);
-            }
 
-            dplayer_danloading = dplayer_danloading ? dplayer_danloading : window[2].document.querySelector(dplayerDanloading)
+                dplayer_danloading = window[window.length - 1] && window[window.length - 1].document && window[window.length - 1].document.querySelector(dplayerDanloading) ? window[window.length - 1].document.querySelector(dplayerDanloading) : window.document.querySelector(dplayerDanloading)
+            }
 
             dplayer_danloading.style.fontSize = "x-large";
             dplayer_danloading.innerHTML = message;
@@ -78,8 +80,8 @@ const myplayer = {
     },
     init: function () {
 
-        dplayer_danloading = dplayer_danloading ? dplayer_danloading : window[2].document.querySelector(dplayerDanloading)
-        dplayer_bezel = dplayer_bezel ? dplayer_bezel : window[2].document.querySelector(dplayerBezel)
+        dplayer_danloading = window[window.length - 1] && window[window.length - 1].document && window[window.length - 1].document.querySelector(dplayerDanloading) ? window[window.length - 1].document.querySelector(dplayerDanloading) : window.document.querySelector(dplayerDanloading)
+        dplayer_bezel = window[window.length - 1] && window[window.length - 1].document && window[window.length - 1].document.querySelector(dplayerBezel) ? window[window.length - 1].document.querySelector(dplayerBezel) : window.document.querySelector(dplayerBezel)
         this.can_play()
 
         doc_s.onkeydown = this.key_down
@@ -107,7 +109,7 @@ const myplayer = {
                     }
                     break;
                 case 67:
-                    if (speedArray.length - myplayerConfig.speed_index - 1 > 0) {
+                    if (speedArray.length - myplayerConfig.speed_index > 0) {
                         myplayerConfig.speed_index += 1
                     }
                     break;
@@ -117,6 +119,7 @@ const myplayer = {
                     break;
                 case 82:
                     myplayer.remove_localStorage()
+                    myplayer.message_box.show('reset speed and skip')
                     break;
                 case 83:
                     break;
@@ -127,7 +130,7 @@ const myplayer = {
                     myplayerConfig.skip_end = video_ele.duration - video_ele.currentTime
                     break;
                 case 88:
-                    if (myplayerConfig.speed_index - 1 > 0) {
+                    if (myplayerConfig.speed_index > 0) {
                         myplayerConfig.speed_index -= 1
                     }
                     break;
@@ -158,6 +161,8 @@ const interval = setInterval(function () {
         myplayer.init()
         clearInterval(interval)
     }
-    video_ele = window.length > 2 ? window[2].document.querySelector(videoEle) : ""
+    video_ele = window[window.length - 1] && window[window.length - 1].document && window[window.length - 1].document.querySelector(videoEle) ? window[window.length - 1].document.querySelector(videoEle) : window.document.querySelector(videoEle)
+
+    console.log(video_ele)
 }, 1000)
 
