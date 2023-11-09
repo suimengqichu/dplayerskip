@@ -163,6 +163,5 @@ const interval = setInterval(function () {
     }
     video_ele = window[window.length - 1] && window[window.length - 1].document && window[window.length - 1].document.querySelector(videoEle) ? window[window.length - 1].document.querySelector(videoEle) : window.document.querySelector(videoEle)
 
-    console.log(video_ele)
 }, 1000)
 
