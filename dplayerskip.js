@@ -1,13 +1,11 @@
 // ==UserScript==
 // @name            观影跳过片头片尾、播放速度、全屏、自动播放下一集
-// @namespace       http://tampermonkey.net/
-// @version         1.0.0
+// @version         1.1.0
 // @description     通过按键控制跳过片头片尾、播放速度、全屏、自动播放下一集
 // @author          随梦期初
-// @match           *://lnyzyw.com/*
 // @match           *://www.ysgc1.cc/*
 // @match           *://www.bytpl.com/*
-// @icon            https://www.google.com/s2/favicons?sz=64&domain=lnyzyw.com
+// @match           *://lnyzyw.com/*
 // @grant           none
 // @license         GPLv3
 // ==/UserScript==
@@ -18,8 +16,6 @@ const intervalTime = 2000
 
 const doc_s = window.document
 const dplayerContainer = "div.dplayer"
-const dplayerDanloading = "div.dplayer-video-wrap > div.dplayer-bezel > span.dplayer-danloading"
-const dplayerBezel = "div.dplayer-video-wrap > div.dplayer-bezel"
 const videoEle = "div.dplayer-video-wrap > .dplayer-video-current"
 const volumeBarWrap = ".dplayer-volume-bar-wrap"
 const volumeBarInner = ".dplayer-volume-bar-inner"
@@ -27,10 +23,7 @@ const dplayerNotice = ".dplayer-notice"
 const adEles = ["#adv_wrap_hh", "#HMcoupletDivleft", "#HMcoupletDivright"]
 
 
-let dplayer_bezel_event,
-    dplayer_container,
-    dplayer_danloading,
-    dplayer_bezel,
+let dplayer_container,
     video_ele
 
 const config = {
@@ -50,12 +43,12 @@ const handler = {
         localStorage.setItem(prop, value)
 
         if (prop !== "speed_index") {
-            myPlayer.message_box.show(`${prop}: ${value}`)
+            myPlayer.notice_event(`${prop} ${value} `)
             video_ele[`data_${prop}`] = value
         } else {
             localStorage.setItem("speed", speedArray[value].toString())
 
-            myPlayer.message_box.show(`speed: ${speedArray[value]}`)
+            myPlayer.notice_event(`speed ${speedArray[value]} `)
 
             target.speed = speedArray[value]
             video_ele.playbackRate = speedArray[value]
@@ -70,33 +63,8 @@ const handler = {
 const myPlayerConfig = new Proxy(config, handler)
 
 const myPlayer = {
-    message_box: {
-        show: function (message) {
-            if (!dplayer_danloading) {
-                let message_ui = doc_s.createElement("span");
-                message_ui.className = "dplayer-danloading";
-                dplayer_bezel.appendChild(message_ui);
-
-                dplayer_danloading = window[window.length - 1] && window[window.length - 1].document && window[window.length - 1].document.querySelector(dplayerDanloading) ? window[window.length - 1].document.querySelector(dplayerDanloading) : window.document.querySelector(dplayerDanloading)
-            }
-
-            dplayer_danloading.style.fontSize = "x-large";
-            dplayer_danloading.innerHTML = message;
-            dplayer_danloading.style.display = "";
-
-            dplayer_bezel_event = setTimeout(this.hide, 2000);
-        },
-        hide: function () {
-            clearTimeout(dplayer_bezel_event)
-            dplayer_danloading.style.display = "none";
-        }
-    },
     init: function () {
         clearInterval(interval)
-
-        dplayer_container = window[window.length - 1] && window[window.length - 1].document && window[window.length - 1].document.querySelector(dplayerContainer) ? window[window.length - 1].document.querySelector(dplayerContainer) : window.document.querySelector(dplayerContainer)
-        dplayer_danloading = window[window.length - 1] && window[window.length - 1].document && window[window.length - 1].document.querySelector(dplayerDanloading) ? window[window.length - 1].document.querySelector(dplayerDanloading) : window.document.querySelector(dplayerDanloading)
-        dplayer_bezel = window[window.length - 1] && window[window.length - 1].document && window[window.length - 1].document.querySelector(dplayerBezel) ? window[window.length - 1].document.querySelector(dplayerBezel) : window.document.querySelector(dplayerBezel)
 
         if (window.document.querySelector(videoEle)) {
 
@@ -109,7 +77,7 @@ const myPlayer = {
             }
 
             video_ele.autoplay = true
-            video_ele.oncanplay = this.can_play
+
             video_ele.onplay = this.play_event
             video_ele.onpause = this.pause_event
             video_ele.data_skip_end && this.skip_end_event()
@@ -165,7 +133,7 @@ const myPlayer = {
                     dplayer_container.exitFullscreen().then(() => {})
                     break;
                 case 32:
-                    if (e.currentTarget.querySelector(videoEle)) {
+                    if (e.currentTarget.querySelector(videoEle) && window.parent.length > 1) {
                         return
                     }
 
@@ -181,6 +149,8 @@ const myPlayer = {
                     }
 
                     video_ele.currentTime -= 5
+
+                    myPlayer.notice_event("快退 5 秒")
                     break;
                 case 38:
                     if (e.currentTarget.querySelector(videoEle)) {
@@ -195,6 +165,7 @@ const myPlayer = {
                     }
 
                     video_ele.currentTime += 5
+                    myPlayer.notice_event("快进 5 秒")
                     break
                 case 40:
                     if (e.currentTarget.querySelector(videoEle)) {
@@ -259,12 +230,12 @@ const myPlayer = {
         if(regRes) {
             let pre_lc = lc.pathname.replace(/\d+(?=\.html$)/, Number(regRes[0]) - 1)
             if (window.parent.document.querySelector(`a[href="${pre_lc}"]`)) {
-                myPlayer.message_box.show('previous')
-                location.href = pre_lc
+                myPlayer.notice_event('previous')
+                window.parent.location.href = pre_lc
                 return
             }
         }
-        myPlayer.message_box.show('没有上一集了')
+        myPlayer.notice_event('没有上一集了')
     },
     next: function () {
         let lc = window.parent ? window.parent.location : window.location;
@@ -272,12 +243,12 @@ const myPlayer = {
         if(regRes) {
             let next_lc = lc.pathname.replace(/\d+(?=\.html$)/, Number(regRes[0]) + 1)
             if (window.parent.document.querySelector(`a[href="${next_lc}"]`)) {
-                myPlayer.message_box.show('next')
-                location.href = next_lc
+                myPlayer.notice_event('next')
+                window.parent.location.href = next_lc
                 return
             }
         }
-        myPlayer.message_box.show('没有下一集了')
+        myPlayer.notice_event('没有下一集了')
     },
     volume_up: function () {
         if (video_ele.volume < 1) {
@@ -298,26 +269,36 @@ const myPlayer = {
         percentage = Math.min(percentage, 1)
 
         let formatPercentage = ''.concat((percentage * 100).toFixed(0), '%')
-        window[window.length - 1].document.querySelector(volumeBarWrap).dataset.balloon = formatPercentage
-        window[window.length - 1].document.querySelector(volumeBarInner).style.width = formatPercentage
-        window[window.length - 1].document.querySelector(dplayerNotice).innerHTML = `音量: ${formatPercentage}`
-        window[window.length - 1].document.querySelector(dplayerNotice).style.opacity = "0.8"
-        let timeout = setTimeout(() => {
-            window[window.length - 1].document.querySelector(dplayerNotice).style.opacity = "0"
-            clearTimeout(timeout)
-        }, 2000)
+
+        dplayer_container.querySelector(volumeBarWrap).dataset.balloon = formatPercentage
+        dplayer_container.querySelector(volumeBarInner).style.width = formatPercentage
+
+        myPlayer.notice_event(`音量 ${formatPercentage}`)
+    },
+    notice_event: function (text, opacity=0.8, time=2000) {
+        dplayer_container.querySelector(dplayerNotice).innerHTML = text
+        dplayer_container.querySelector(dplayerNotice).style.opacity = opacity.toString()
+
+        if (video_ele.timeout) {
+            clearTimeout(video_ele.timeout)
+        }
+
+        video_ele.timeout = setTimeout(() => {
+            dplayer_container.querySelector(dplayerNotice).style.opacity = "0"
+        }, time)
     }
 }
 
 // doc_s.onkeydown = myPlayer.key_down
 let count = 0
 const interval = setInterval(function () {
-    video_ele = window[window.length - 1] && window[window.length - 1].document && window[window.length - 1].document.querySelector(videoEle) ? window[window.length - 1].document.querySelector(videoEle) : window.document.querySelector(videoEle)
+    dplayer_container = window.length > 1 && window[window.length - 1].document && window[window.length - 1].document.querySelector(dplayerContainer) ? window[window.length - 1].document.querySelector(dplayerContainer) : window.document.querySelector(dplayerContainer)
 
     myPlayer.remove_ad()
     count++
 
-    if (video_ele) {
+    if (dplayer_container) {
+        video_ele = dplayer_container.querySelector(videoEle)
         myPlayer.init()
     } else if (count > 20) {
         clearInterval(interval)
