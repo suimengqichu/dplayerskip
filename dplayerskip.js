@@ -1,10 +1,11 @@
 // ==UserScript==
 // @name            观影跳过片头片尾、播放速度、全屏、自动播放下一集
-// @version         1.1.0
+// @version         1.2.0
 // @description     通过按键控制跳过片头片尾、播放速度、全屏、自动播放下一集
 // @author          随梦期初
 // @match           *://www.ysgc1.cc/*
 // @match           *://www.bytpl.com/*
+// @match           *://www.ffys.vip/*
 // @match           *://lnyzyw.com/*
 // @grant           none
 // @license         GPLv3
@@ -22,15 +23,24 @@ const volumeBarInner = ".dplayer-volume-bar-inner"
 const dplayerNotice = ".dplayer-notice"
 const adEles = ["#adv_wrap_hh", "#HMcoupletDivleft", "#HMcoupletDivright"]
 
+const skipStartStr = "skip_start",
+    skipEndStr = "skip_end",
+    speedStr = "speed",
+    speedIndexStr = "speed_index",
+    bufferStr = "buffer",
+    bufferOpen = "open",
+    bufferClose = "close"
+
 
 let dplayer_container,
     video_ele
 
 const config = {
-    skip_start: localStorage.getItem("skip_start") ? parseInt(localStorage.getItem("skip_start")) : 0,
-    skip_end: localStorage.getItem("skip_end") ? parseInt(localStorage.getItem("skip_end")) : 0,
-    speed: localStorage.getItem("speed") ? parseInt(localStorage.getItem("speed")) : 1.0,
-    speed_index: localStorage.getItem("speed_index") ? parseInt(localStorage.getItem("speed_index")) : 9
+    skip_start: localStorage.getItem(skipStartStr) ? parseInt(localStorage.getItem(skipStartStr)) : 0,
+    skip_end: localStorage.getItem(skipEndStr) ? parseInt(localStorage.getItem(skipEndStr)) : 0,
+    speed: localStorage.getItem(speedStr) ? parseFloat(localStorage.getItem(speedStr)) : 1.0,
+    speed_index: localStorage.getItem(speedIndexStr) ? parseInt(localStorage.getItem(speedIndexStr)) : 9,
+    buffer: localStorage.getItem(bufferStr) ? localStorage.getItem(bufferStr) : bufferClose
 }
 
 const handler = {
@@ -42,19 +52,17 @@ const handler = {
 
         localStorage.setItem(prop, value)
 
-        if (prop !== "speed_index") {
+        if (prop !== speedIndexStr) {
             myPlayer.notice_event(`${prop} ${value} `)
             video_ele[`data_${prop}`] = value
         } else {
-            localStorage.setItem("speed", speedArray[value].toString())
-
-            myPlayer.notice_event(`speed ${speedArray[value]} `)
+            localStorage.setItem(speedStr, speedArray[value].toString())
 
             target.speed = speedArray[value]
             video_ele.playbackRate = speedArray[value]
         }
 
-        if (prop === "skip_end") {
+        if (prop === skipEndStr) {
             myPlayer.skip_end_event()
         }
     }
@@ -68,15 +76,16 @@ const myPlayer = {
 
         if (window.document.querySelector(videoEle)) {
 
-            video_ele.playbackRate = myPlayerConfig.speed
-            video_ele.data_skip_start = myPlayerConfig.skip_start
-            video_ele.data_skip_end = myPlayerConfig.skip_end
+            video_ele.autoplay = true
 
             if (parseInt(myPlayerConfig.skip_start) > parseInt(video_ele.currentTime)) {
                 video_ele.currentTime = myPlayerConfig.skip_start
             }
 
-            video_ele.autoplay = true
+            video_ele.onratechange = this.ratechange
+            video_ele.oncanplay = this.can_play
+
+            video_ele.onprogress = this.progress
 
             video_ele.onplay = this.play_event
             video_ele.onpause = this.pause_event
@@ -85,6 +94,12 @@ const myPlayer = {
 
         doc_s.onkeydown = this.key_down
 
+    },
+    progress: function () {
+        video_ele.data_buffer_end = !!(video_ele.buffered.length && video_ele.buffered.end(video_ele.buffered.length - 1) === video_ele.duration - video_ele.data_skip_end)
+    },
+    ratechange: function () {
+        myPlayer.notice_event(`speed ${video_ele.playbackRate} `)
     },
     skip_end_event: function () {
         let interval = setInterval(function () {
@@ -118,9 +133,9 @@ const myPlayer = {
         }
     },
     key_down: function (e) {
-        if (doc_s.activeElement && doc_s.activeElement.id !== "" || (doc_s.activeElement.tagName.toLowerCase() in ['input', 'textarea'])) {
-            return
-        } else {
+        const tag = doc_s.activeElement.tagName.toUpperCase()
+        const editable = doc_s.activeElement.getAttribute('contenteditable')
+        if (tag !== 'INPUT' && tag !== 'TEXTAREA' && editable !== '' && editable !== 'true') {
             e.preventDefault()
             let speed = video_ele.playbackRate
             let speed_index = speedArray.indexOf(speed)
@@ -174,6 +189,17 @@ const myPlayer = {
 
                     myPlayer.volume_down()
                     break
+                case 66:
+                    myPlayerConfig.buffer = video_ele.data_buffer === bufferClose ? bufferOpen : bufferClose
+
+                    if (video_ele.paused && video_ele.data_buffer === bufferOpen && !video_ele.data_buffer_end) {
+                        video_ele.oncanplaythrough = myPlayer.buffer_func
+                        video_ele.currentTime += 1
+                    } else {
+                        video_ele.oncanplaythrough = () => {}
+                        video_ele.data_current_time && (video_ele.currentTime = video_ele.data_current_time)
+                    }
+                    break;
                 case 67:
                     if (speedArray.length - speed_index > 0) {
                         myPlayerConfig.speed_index = speed_index + 1
@@ -213,16 +239,38 @@ const myPlayer = {
         }, 200)
     },
     can_play: function () {
+        video_ele.playbackRate = myPlayerConfig.speed
+        video_ele.data_skip_start = myPlayerConfig.skip_start
+        video_ele.data_skip_end = myPlayerConfig.skip_end
+        video_ele.data_buffer = myPlayerConfig.buffer
+        video_ele.data_buffer_end = false
 
+        video_ele.oncanplay = () => {}
 
-
+    },
+    buffer_func: function () {
+        if (video_ele.currentTime === video_ele.duration) {
+            video_ele.data_buffer_end = true
+        } else {
+            video_ele.currentTime += 2
+            if (myPlayer.left_duration() < video_ele.data_skip_end) {
+                video_ele.currentTime = video_ele.data_current_time
+                video_ele.data_buffer_end = true
+            }
+        }
     },
     pause_event: function() {
         myPlayer.remove_ad()
         video_ele.paused = true
+        video_ele.data_current_time = video_ele.currentTime
+
+        (video_ele.data_buffer === bufferClose) || video_ele.data_buffer_end || !(video_ele.oncanplaythrough = myPlayer.buffer_func) || (video_ele.currentTime += 1)
     },
     play_event: function() {
         video_ele.paused = false
+        video_ele.currentTime = video_ele.data_current_time
+
+        video_ele.oncanplaythrough = () => {}
     },
     pre: function () {
         let lc = window.parent ? window.parent.location : window.location;
@@ -289,7 +337,6 @@ const myPlayer = {
     }
 }
 
-// doc_s.onkeydown = myPlayer.key_down
 let count = 0
 const interval = setInterval(function () {
     dplayer_container = window.length > 1 && window[window.length - 1].document && window[window.length - 1].document.querySelector(dplayerContainer) ? window[window.length - 1].document.querySelector(dplayerContainer) : window.document.querySelector(dplayerContainer)
